@@ -1,0 +1,5 @@
+openai
+openai-agents
+faiss-cpu
+requests
+numpy
