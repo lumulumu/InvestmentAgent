@@ -37,6 +37,7 @@ from urllib3.util import Retry
 # -----------------------------------------------------------------------------
 
 def _env(name: str) -> str:
+    """Return an environment variable or abort if missing."""
     val = os.getenv(name)
     if not val:
         raise EnvironmentError(f"Required environment variable {name} not set.")
@@ -83,13 +84,16 @@ else:
 
 @lru_cache(maxsize=2048)
 def _embed(text: str) -> np.ndarray:
-    vec = client.embeddings.create(model="text-embedding-ada-002", input=[text]).data[0].embedding
+    """Return the normalised embedding for ``text``."""
+    vec = client.embeddings.create(
+        model="text-embedding-ada-002", input=[text]
+    ).data[0].embedding
     vec = np.asarray(vec, dtype="float32")
     return vec / np.linalg.norm(vec)
 
 
 def _extract_pdf(file_path: str) -> str:
-    """Upload PDF and let GPT‑Vision extract raw text."""
+    """Upload ``file_path`` and let GPT‑Vision return the plain text."""
     with open(file_path, "rb") as pdf:
         up_file = client.files.create(file=pdf, purpose="user_data")
 
@@ -114,7 +118,7 @@ parse_pdf = function_tool(_extract_pdf)
 
 @function_tool
 def web_search(query: str) -> str:
-    """Lightweight Google search via SerpAPI (top 5)"""
+    """Perform a lightweight Google search via SerpAPI and return the top results."""
     resp = _session.get(
         "https://serpapi.com/search",
         params={"q": query, "engine": "google", "api_key": SERPAPI_API_KEY, "num": 5},
@@ -129,7 +133,7 @@ def web_search(query: str) -> str:
 
 def vector_memory_impl(action: str, *, project: str = "", summary: str = "",
                       keywords: List[str] | None = None, rationale: str = "") -> Any:
-    """Add/query/list vectors in FAISS store."""
+    """Add, query or list vectors in the persistent FAISS store."""
     global index, metadata
 
     if action == "add":
@@ -153,7 +157,7 @@ def vector_memory_impl(action: str, *, project: str = "", summary: str = "",
 
 # Tool-Variante für den Agenten
 vector_memory_tool = function_tool(vector_memory_impl)
-# Direkter Funktionsaufruf
+# Expose the implementation directly for local calls
 vector_memory = vector_memory_impl
 
 # -----------------------------------------------------------------------------
@@ -167,8 +171,14 @@ financial_agent  = Agent("FinancialHealthAgent",  instructions="Extract key fina
 market_agent     = Agent("MarketOpportunityAgent", instructions="Analyse market size & competition.",          tools=search_tools, model=MODEL_NAME)
 risk_agent       = Agent("RiskAssessmentAgent",    instructions="Identify major financial & operational risks.", tools=search_tools, model=MODEL_NAME)
 report_agent     = Agent("ReportAgent",            instructions="Return ONLY valid minified JSON: {\"summary\":..., \"keywords\":[], \"metrics\":{}}. No comments, no trailing commas, no explanations.", tools=[], model=MODEL_NAME)
-supervisor_agent = Agent("SupervisorAgent",        instructions="Return YES/NO or RETRY <Agent>:<reason>.",       tools=vector_tools, model=MODEL_NAME)
+supervisor_agent = Agent(
+    "SupervisorAgent",
+    instructions="Return YES/NO or RETRY <Agent>:<reason>.",
+    tools=vector_tools,
+    model=MODEL_NAME,
+)
 
+# Mapping from agent names to instances for orchestration
 AGENT_MAP = {
     "FinancialHealthAgent": financial_agent,
     "MarketOpportunityAgent": market_agent,
@@ -180,22 +190,36 @@ AGENT_MAP = {
 # -----------------------------------------------------------------------------
 
 def _html(path: str, project: str, summary: str, keywords: list[str], metrics: dict[str, Any], decision: str, rationale: str):
+    """Write a small HTML report summarising the agent output."""
     esc = lambda s: html.escape(str(s))
-    rows = "".join(f"<tr><td>{esc(k)}</td><td>{esc(v)}</td></tr>" for k, v in metrics.items())
-    body = f"<h1>{esc(project)}</h1><h2>Summary</h2><p>{esc(summary)}</p><h2>Keywords</h2><ul>{''.join(f'<li>{esc(k)}</li>' for k in keywords)}</ul><h2>Metrics</h2><table>{rows}</table><h2>Decision</h2><p>{esc(decision)}</p><h2>Rationale</h2><p>{esc(rationale)}</p>"
-    open(path, "w", encoding="utf-8").write(f"<!doctype html><html><head><meta charset='utf-8'></head><body>{body}</body></html>")
+    rows = "".join(
+        f"<tr><td>{esc(k)}</td><td>{esc(v)}</td></tr>" for k, v in metrics.items()
+    )
+    body = (
+        f"<h1>{esc(project)}</h1><h2>Summary</h2><p>{esc(summary)}</p>"
+        f"<h2>Keywords</h2><ul>{''.join(f'<li>{esc(k)}</li>' for k in keywords)}</ul>"
+        f"<h2>Metrics</h2><table>{rows}</table>"
+        f"<h2>Decision</h2><p>{esc(decision)}</p>"
+        f"<h2>Rationale</h2><p>{esc(rationale)}</p>"
+    )
+    open(path, "w", encoding="utf-8").write(
+        f"<!doctype html><html><head><meta charset='utf-8'></head><body>{body}</body></html>"
+    )
 
 # -----------------------------------------------------------------------------
 # Orchestrator
 # -----------------------------------------------------------------------------
 
 def evaluate(pdf: str, project: str) -> Dict[str, Any]:
+    """Run the full agent pipeline on ``pdf`` and return the aggregated result."""
     text = _extract_pdf(pdf)
 
-    # initial pass
+    # Run all specialist agents on the extracted text
     results = {k: Runner.run_sync(v, text).final_output for k, v in AGENT_MAP.items()}
 
     while True:
+        # Supervisor may request a retry of one of the agents. Currently we only
+        # run a single pass, but the loop allows for future extensions.
         report_payload = (
             f"Financial:\n{results['FinancialHealthAgent']}\n\n"
             f"Market:\n{results['MarketOpportunityAgent']}\n\n"
@@ -225,7 +249,7 @@ def evaluate(pdf: str, project: str) -> Dict[str, Any]:
         rationale = rationale_parts[0] if rationale_parts else ""
         break  # exit while
 
-    # persist & export
+    # Persist the interaction history and write the HTML report
     vector_memory("add", project=project, summary=summary, keywords=keywords, rationale=rationale)
     html_path = os.path.join(REPORT_DIR, f"{project}.html")
     _html(html_path, project, summary, keywords, metrics, decision, rationale)
@@ -244,6 +268,7 @@ def evaluate(pdf: str, project: str) -> Dict[str, Any]:
 # CLI entry
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
+    # Simple CLI interface for manual runs
     if len(sys.argv) != 3:
         sys.exit("Usage: python investment_agents.py <pdf_path> <project_name>")
     output = evaluate(sys.argv[1], sys.argv[2])

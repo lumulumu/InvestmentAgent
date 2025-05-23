@@ -27,4 +27,5 @@ Run the evaluation with:
 python investment_agents.py ./KPIs.pdf test
 ```
 
-The PDF path is the first
+The PDF path is the first argument and `test` is the project name used to store
+the results. Generated HTML reports are written to `data/reports/<project>.html`.
