@@ -17,3 +17,5 @@ numpy
 
 # Templating
 Jinja2
+
+PyPDF2

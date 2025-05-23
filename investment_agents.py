@@ -104,11 +104,16 @@ def _extract_pdf(file_path: str, chunk_pages: int = 20) -> str:
         writer = PdfWriter()
         for p in range(start, min(start + chunk_pages, len(reader.pages))):
             writer.add_page(reader.pages[p])
-        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             writer.write(tmp)
             tmp.flush()
-            tmp.seek(0)
-            up_file = client.files.create(file=tmp, purpose="user_data")
+            tmp_path = tmp.name  # Merke den Pfad
+
+        with open(tmp_path, "rb") as f:
+            up_file = client.files.create(file=f, purpose="user_data")
+
+        # Optional: temporäre Datei löschen
+        os.remove(tmp_path)
 
         comp = client.chat.completions.create(
             model=MODEL_NAME,
