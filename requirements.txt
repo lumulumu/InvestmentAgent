@@ -1,5 +1,19 @@
-openai
-openai-agents
-faiss-cpu
+# Kern-Libraries
+openai>=1.0.0          # OpenAI-Python v1-API
+openai-agents          # Offizielles Agents-SDK
+
+# Vektorspeicher
+faiss-cpu              # oder faiss-gpu, falls CUDA verfügbar
+
+# PDF-Handling
+PyPDF2
+
+# Web & HTTP
 requests
+urllib3                # für Retry-Adapter (requests bringt es intern mit, aber Version fixieren schadet nicht)
+
+# Daten & Utils
 numpy
+
+# Templating
+Jinja2
