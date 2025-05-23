@@ -350,8 +350,22 @@ async def evaluate(pdf: str, project: str) -> Dict[str, Any]:
 # CLI entry
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Simple CLI interface for manual runs
     if len(sys.argv) != 3:
         sys.exit("Usage: python investment_agents.py <pdf_path> <project_name>")
-    output = asyncio.run(evaluate(sys.argv[1], sys.argv[2]))
-    print("Report saved to", output["html"])
+    import asyncio
+
+    async def main():
+        output = await evaluate(sys.argv[1], sys.argv[2])
+        print("Report saved to", output["html"])
+
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        # Fallback für laufenden Event-Loop (z.B. Jupyter, VS Code)
+        if "already running" in str(e):
+            import nest_asyncio
+            nest_asyncio.apply()
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
+        else:
+            raise

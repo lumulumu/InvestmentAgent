@@ -21,3 +21,4 @@ Jinja2
 PyPDF2
 
 asyncio
+nest_asyncio
