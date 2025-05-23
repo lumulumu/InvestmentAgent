@@ -11,10 +11,12 @@ import html
 import re
 from typing import Any, Dict, List
 from functools import lru_cache
+import tempfile
 
 import numpy as np
 import requests
 import openai
+from PyPDF2 import PdfReader, PdfWriter
 
 # -----------------------------------------------------------------------------
 # Optional deps with explicit error messages
@@ -92,25 +94,42 @@ def _embed(text: str) -> np.ndarray:
     return vec / np.linalg.norm(vec)
 
 
-def _extract_pdf(file_path: str) -> str:
-    """Upload ``file_path`` and let GPT‑Vision return the plain text."""
-    with open(file_path, "rb") as pdf:
-        up_file = client.files.create(file=pdf, purpose="user_data")
+def _extract_pdf(file_path: str, chunk_pages: int = 20) -> str:
+    """Upload ``file_path`` in page chunks and let GPT‑Vision return the text."""
 
-    comp = client.chat.completions.create(
-        model=MODEL_NAME,
-        response_format={"type": "text"},
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "file", "file": {"file_id": up_file.id}},
-                    {"type": "text", "text": "Extract the full text of this PDF."},
-                ],
-            }
-        ],
-    )
-    return comp.choices[0].message.content.strip()
+    reader = PdfReader(open(file_path, "rb"))
+    text_parts: List[str] = []
+
+    for start in range(0, len(reader.pages), chunk_pages):
+        writer = PdfWriter()
+        for p in range(start, min(start + chunk_pages, len(reader.pages))):
+            writer.add_page(reader.pages[p])
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+            writer.write(tmp)
+            tmp.flush()
+            tmp.seek(0)
+            up_file = client.files.create(file=tmp, purpose="user_data")
+
+        comp = client.chat.completions.create(
+            model=MODEL_NAME,
+            response_format={"type": "text"},
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "file", "file": {"file_id": up_file.id}},
+                        {"type": "text", "text": "Extract the full text of this PDF."},
+                    ],
+                }
+            ],
+        )
+        text_parts.append(comp.choices[0].message.content.strip())
+        try:
+            client.files.delete(up_file.id)
+        except Exception:
+            pass  # ignore cleanup errors
+
+    return "\n".join(text_parts)
 
 # Register tools
 parse_pdf = function_tool(_extract_pdf)
