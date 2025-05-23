@@ -127,8 +127,8 @@ def web_search(query: str) -> str:
     )
 
 
-def vector_memory(action: str, *, project: str = "", summary: str = "",
-                  keywords: List[str] | None = None, rationale: str = "") -> Any:
+def vector_memory_impl(action: str, *, project: str = "", summary: str = "",
+                      keywords: List[str] | None = None, rationale: str = "") -> Any:
     """Add/query/list vectors in FAISS store."""
     global index, metadata
 
@@ -151,17 +151,22 @@ def vector_memory(action: str, *, project: str = "", summary: str = "",
 
     raise ValueError("vector_memory action must be add|query|list")
 
+# Tool-Variante für den Agenten
+vector_memory_tool = function_tool(vector_memory_impl)
+# Direkter Funktionsaufruf
+vector_memory = vector_memory_impl
+
 # -----------------------------------------------------------------------------
 # Agent definitions
 # -----------------------------------------------------------------------------
 shared_tools  = [parse_pdf]
 search_tools  = [parse_pdf, web_search]
-vector_tools  = [vector_memory]
+vector_tools  = [vector_memory_tool]
 
 financial_agent  = Agent("FinancialHealthAgent",  instructions="Extract key financial metrics.",              tools=shared_tools, model=MODEL_NAME)
 market_agent     = Agent("MarketOpportunityAgent", instructions="Analyse market size & competition.",          tools=search_tools, model=MODEL_NAME)
 risk_agent       = Agent("RiskAssessmentAgent",    instructions="Identify major financial & operational risks.", tools=search_tools, model=MODEL_NAME)
-report_agent     = Agent("ReportAgent",            instructions="Return pure JSON: summary, keywords[], metrics{}.", tools=[], model=MODEL_NAME)
+report_agent     = Agent("ReportAgent",            instructions="Return ONLY valid minified JSON: {\"summary\":..., \"keywords\":[], \"metrics\":{}}. No comments, no trailing commas, no explanations.", tools=[], model=MODEL_NAME)
 supervisor_agent = Agent("SupervisorAgent",        instructions="Return YES/NO or RETRY <Agent>:<reason>.",       tools=vector_tools, model=MODEL_NAME)
 
 AGENT_MAP = {
@@ -197,12 +202,14 @@ def evaluate(pdf: str, project: str) -> Dict[str, Any]:
             f"Risk:\n{results['RiskAssessmentAgent']}"
         )
         raw = Runner.run_sync(report_agent, report_payload).final_output.strip()
+        print("RAW OUTPUT FROM REPORT AGENT:\n", raw)
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
             m = re.search(r"\{.*\}", raw, re.S)
             if not m:
                 raise ValueError("ReportAgent returned no JSON")
+            print("REGEX-MATCHED JSON:\n", m.group(0))
             data = json.loads(m.group(0))
 
         summary, keywords, metrics = data["summary"], data["keywords"], data["metrics"]
