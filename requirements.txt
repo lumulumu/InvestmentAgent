@@ -19,3 +19,5 @@ numpy
 Jinja2
 
 PyPDF2
+
+asyncio
