@@ -12,6 +12,7 @@ import re
 from typing import Any, Dict, List
 from functools import lru_cache
 import tempfile
+import asyncio
 
 import numpy as np
 import requests
@@ -289,12 +290,14 @@ def _html(path: str, project: str, summary: str, keywords: list[str], metrics: d
 # Orchestrator
 # -----------------------------------------------------------------------------
 
-def evaluate(pdf: str, project: str) -> Dict[str, Any]:
+async def evaluate(pdf: str, project: str) -> Dict[str, Any]:
     """Run the full agent pipeline on ``pdf`` and return the aggregated result."""
     text = _extract_pdf(pdf)
 
-    # Run all specialist agents on the extracted text
-    results = {k: Runner.run_sync(v, text).final_output for k, v in AGENT_MAP.items()}
+    # Run all specialist agents on the extracted text concurrently
+    tasks = {k: Runner.run(v, text) for k, v in AGENT_MAP.items()}
+    raw_results = await asyncio.gather(*tasks.values())
+    results = {k: r.final_output for k, r in zip(tasks.keys(), raw_results)}
 
     while True:
         # Supervisor may request a retry of one of the agents. Currently we only
@@ -350,5 +353,5 @@ if __name__ == "__main__":
     # Simple CLI interface for manual runs
     if len(sys.argv) != 3:
         sys.exit("Usage: python investment_agents.py <pdf_path> <project_name>")
-    output = evaluate(sys.argv[1], sys.argv[2])
+    output = asyncio.run(evaluate(sys.argv[1], sys.argv[2]))
     print("Report saved to", output["html"])

@@ -1,6 +1,6 @@
 import os
 import importlib
-import types
+import asyncio
 
 import numpy as np
 import faiss
@@ -33,11 +33,17 @@ def fake_run_sync(agent, text):
     return Res(f'result from {agent.name}')
 
 
+async def fake_run_async(agent, text):
+    await asyncio.sleep(0)
+    return fake_run_sync(agent, text)
+
+
 def test_evaluate_creates_html(tmp_path, monkeypatch):
     setup_simple_env(tmp_path, monkeypatch)
     monkeypatch.setattr(ia, '_extract_pdf', lambda pdf: 'text')
     monkeypatch.setattr(ia.Runner, 'run_sync', staticmethod(fake_run_sync))
-    result = ia.evaluate('dummy.pdf', 'proj1')
+    monkeypatch.setattr(ia.Runner, 'run', staticmethod(fake_run_async))
+    result = asyncio.run(ia.evaluate('dummy.pdf', 'proj1'))
     assert result['summary'] == 's'
     assert result['decision'] == 'YES'
     assert os.path.exists(result['html'])
