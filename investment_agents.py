@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 import sys
 import json
-import html
+from jinja2 import Environment, select_autoescape
 import re
 from typing import Any, Dict, List
 from functools import lru_cache
@@ -205,25 +205,32 @@ AGENT_MAP = {
 }
 
 # -----------------------------------------------------------------------------
-# HTML report helper (escaped)
+# HTML report helper using Jinja2 template (autoescaped)
 # -----------------------------------------------------------------------------
+
+_env = Environment(autoescape=select_autoescape(["html"]))
+_HTML_TEMPLATE = _env.from_string(
+    """<!doctype html><html><head><meta charset='utf-8'></head><body>"
+    "<h1>{{ project }}</h1>"
+    "<h2>Summary</h2><p>{{ summary }}</p>"
+    "<h2>Keywords</h2><ul>{% for k in keywords %}<li>{{ k }}</li>{% endfor %}</ul>"
+    "<h2>Metrics</h2><table>{% for k, v in metrics.items() %}<tr><td>{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}</table>"
+    "<h2>Decision</h2><p>{{ decision }}</p>"
+    "<h2>Rationale</h2><p>{{ rationale }}</p>"
+    "</body></html>"""  # noqa: E501
+)
 
 def _html(path: str, project: str, summary: str, keywords: list[str], metrics: dict[str, Any], decision: str, rationale: str):
     """Write a small HTML report summarising the agent output."""
-    esc = lambda s: html.escape(str(s))
-    rows = "".join(
-        f"<tr><td>{esc(k)}</td><td>{esc(v)}</td></tr>" for k, v in metrics.items()
+    html_content = _HTML_TEMPLATE.render(
+        project=project,
+        summary=summary,
+        keywords=keywords,
+        metrics=metrics,
+        decision=decision,
+        rationale=rationale,
     )
-    body = (
-        f"<h1>{esc(project)}</h1><h2>Summary</h2><p>{esc(summary)}</p>"
-        f"<h2>Keywords</h2><ul>{''.join(f'<li>{esc(k)}</li>' for k in keywords)}</ul>"
-        f"<h2>Metrics</h2><table>{rows}</table>"
-        f"<h2>Decision</h2><p>{esc(decision)}</p>"
-        f"<h2>Rationale</h2><p>{esc(rationale)}</p>"
-    )
-    open(path, "w", encoding="utf-8").write(
-        f"<!doctype html><html><head><meta charset='utf-8'></head><body>{body}</body></html>"
-    )
+    open(path, "w", encoding="utf-8").write(html_content)
 
 # -----------------------------------------------------------------------------
 # Orchestrator
