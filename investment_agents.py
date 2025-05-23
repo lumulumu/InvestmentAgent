@@ -16,6 +16,8 @@ import tempfile
 import numpy as np
 import requests
 import openai
+import logging
+import time
 from PyPDF2 import PdfReader, PdfWriter
 
 # -----------------------------------------------------------------------------
@@ -49,6 +51,11 @@ OPENAI_API_KEY   = _env("OPENAI_API_KEY")
 SERPAPI_API_KEY  = _env("SERPAPI_API_KEY")
 MODEL_NAME       = os.getenv("AGENT_MODEL", "gpt-4o")  # override if project has access
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+RETRY_POLICY = Retry(total=3, backoff_factor=.5, status_forcelist=[429, 500, 502, 503])
+
 # -----------------------------------------------------------------------------
 # OpenAI & HTTP clients
 # -----------------------------------------------------------------------------
@@ -57,8 +64,49 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=30, max_retries=2)
 _session = requests.Session()
 _session.mount(
     "https://",
-    HTTPAdapter(max_retries=Retry(total=3, backoff_factor=.5, status_forcelist=[429, 500, 502, 503]))
+    HTTPAdapter(max_retries=RETRY_POLICY)
 )
+
+
+def _openai_call(func, *args, **kwargs):
+    """Call an OpenAI client function with retries."""
+    for attempt in range(RETRY_POLICY.total):
+        try:
+            return func(*args, **kwargs)
+        except openai.OpenAIError as exc:  # pragma: no cover - network
+            logger.error(
+                "OpenAI call %s failed (%d/%d): %s",
+                func.__name__,
+                attempt + 1,
+                RETRY_POLICY.total,
+                exc,
+            )
+            if attempt == RETRY_POLICY.total - 1:
+                raise
+            time.sleep(RETRY_POLICY.backoff_factor * (2 ** attempt))
+
+
+def _serpapi_request(params: Dict[str, Any]) -> requests.Response | None:
+    """Perform a SerpAPI request with retries."""
+    for attempt in range(RETRY_POLICY.total):
+        try:
+            resp = _session.get(
+                "https://serpapi.com/search",
+                params=params,
+                timeout=10,
+            )
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException as exc:  # pragma: no cover - network
+            logger.error(
+                "SerpAPI request failed (%d/%d): %s",
+                attempt + 1,
+                RETRY_POLICY.total,
+                exc,
+            )
+            if attempt == RETRY_POLICY.total - 1:
+                return None
+            time.sleep(RETRY_POLICY.backoff_factor * (2 ** attempt))
 
 # -----------------------------------------------------------------------------
 # Local storage paths
@@ -87,8 +135,10 @@ else:
 @lru_cache(maxsize=2048)
 def _embed(text: str) -> np.ndarray:
     """Return the normalised embedding for ``text``."""
-    vec = client.embeddings.create(
-        model="text-embedding-ada-002", input=[text]
+    vec = _openai_call(
+        client.embeddings.create,
+        model="text-embedding-ada-002",
+        input=[text],
     ).data[0].embedding
     vec = np.asarray(vec, dtype="float32")
     return vec / np.linalg.norm(vec)
@@ -110,12 +160,13 @@ def _extract_pdf(file_path: str, chunk_pages: int = 20) -> str:
             tmp_path = tmp.name  # Merke den Pfad
 
         with open(tmp_path, "rb") as f:
-            up_file = client.files.create(file=f, purpose="user_data")
+            up_file = _openai_call(client.files.create, file=f, purpose="user_data")
 
         # Optional: temporäre Datei löschen
         os.remove(tmp_path)
 
-        comp = client.chat.completions.create(
+        comp = _openai_call(
+            client.chat.completions.create,
             model=MODEL_NAME,
             response_format={"type": "text"},
             messages=[
@@ -130,7 +181,7 @@ def _extract_pdf(file_path: str, chunk_pages: int = 20) -> str:
         )
         text_parts.append(comp.choices[0].message.content.strip())
         try:
-            client.files.delete(up_file.id)
+            _openai_call(client.files.delete, up_file.id)
         except Exception:
             pass  # ignore cleanup errors
 
@@ -143,12 +194,9 @@ parse_pdf = function_tool(_extract_pdf)
 @function_tool
 def web_search(query: str) -> str:
     """Perform a lightweight Google search via SerpAPI and return the top results."""
-    resp = _session.get(
-        "https://serpapi.com/search",
-        params={"q": query, "engine": "google", "api_key": SERPAPI_API_KEY, "num": 5},
-        timeout=10,
-    )
-    resp.raise_for_status()
+    resp = _serpapi_request({"q": query, "engine": "google", "api_key": SERPAPI_API_KEY, "num": 5})
+    if not resp:
+        return f"SerpAPI error retrieving results for '{query}'"
     return "\n".join(
         f"- {it.get('title')} — {it.get('snippet')} ({it.get('link')})"
         for it in resp.json().get("organic_results", [])
