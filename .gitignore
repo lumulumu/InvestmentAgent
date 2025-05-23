@@ -15,6 +15,9 @@ env.bak/
 venv.bak/
 .venv/
 
+#Static Data
+data/
+
 
 # Installer logs
 pip-log.txt
