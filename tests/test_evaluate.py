@@ -44,10 +44,10 @@ def test_evaluate_creates_html(tmp_path, monkeypatch):
     monkeypatch.setattr(ia.Runner, 'run_sync', staticmethod(fake_run_sync))
     monkeypatch.setattr(ia.Runner, 'run', staticmethod(fake_run_async))
     result = asyncio.run(ia.evaluate('dummy.pdf', 'proj1'))
-    assert result['summary'] == 's'
-    assert result['decision'] == 'YES'
-    assert os.path.exists(result['html'])
-    with open(result['html'], 'r', encoding='utf-8') as fh:
+    assert result.summary == 's'
+    assert result.decision == 'YES'
+    assert os.path.exists(result.html)
+    with open(result.html, 'r', encoding='utf-8') as fh:
         assert '<html>' in fh.read()
 
 

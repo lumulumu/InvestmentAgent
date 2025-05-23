@@ -10,6 +10,7 @@ import json
 from jinja2 import Environment, select_autoescape
 import re
 from typing import Any, Dict, List
+from dataclasses import dataclass
 from functools import lru_cache
 import tempfile
 import asyncio
@@ -20,6 +21,18 @@ import openai
 import logging
 import time
 from PyPDF2 import PdfReader, PdfWriter
+
+
+@dataclass
+class EvaluationResult:
+    """Return type for :func:`evaluate`."""
+
+    summary: str
+    keywords: List[str]
+    metrics: Dict[str, Any]
+    decision: str
+    rationale: str
+    html: str
 
 # -----------------------------------------------------------------------------
 # Optional deps with explicit error messages
@@ -290,7 +303,7 @@ def _html(path: str, project: str, summary: str, keywords: list[str], metrics: d
 # Orchestrator
 # -----------------------------------------------------------------------------
 
-async def evaluate(pdf: str, project: str) -> Dict[str, Any]:
+async def evaluate(pdf: str, project: str) -> EvaluationResult:
     """Run the full agent pipeline on ``pdf`` and return the aggregated result."""
     text = _extract_pdf(pdf)
 
@@ -336,15 +349,14 @@ async def evaluate(pdf: str, project: str) -> Dict[str, Any]:
     html_path = os.path.join(REPORT_DIR, f"{project}.html")
     _html(html_path, project, summary, keywords, metrics, decision, rationale)
 
-    return {
-        **results,
-        "summary": summary,
-        "keywords": keywords,
-        "metrics": metrics,
-        "decision": decision,
-        "rationale": rationale,
-        "html": html_path,
-    }
+    return EvaluationResult(
+        summary=summary,
+        keywords=keywords,
+        metrics=metrics,
+        decision=decision,
+        rationale=rationale,
+        html=html_path,
+    )
 
 # -----------------------------------------------------------------------------
 # CLI entry
@@ -356,7 +368,7 @@ if __name__ == "__main__":
 
     async def main():
         output = await evaluate(sys.argv[1], sys.argv[2])
-        print("Report saved to", output["html"])
+        print("Report saved to", output.html)
 
     try:
         asyncio.run(main())
