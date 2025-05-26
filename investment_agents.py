@@ -256,6 +256,12 @@ vector_tools  = [vector_memory_tool]
 financial_agent  = Agent("FinancialHealthAgent",  instructions="Extract key financial metrics. Return bullet points or \"metric: value\" pairs.",              tools=shared_tools, model=MODEL_NAME)
 market_agent     = Agent("MarketOpportunityAgent", instructions="Analyse market size and competition. Provide bullet points or \"factor: detail\" pairs summarising opportunity.",          tools=search_tools, model=MODEL_NAME)
 risk_agent       = Agent("RiskAssessmentAgent",    instructions="Identify major financial and operational risks. Return bullet points or \"risk: explanation\" pairs.", tools=search_tools, model=MODEL_NAME)
+alveus_fit_agent = Agent(
+    "AlveusFitAgent",
+    instructions="Bewerte den Alveus-Fit: Distanz des Targets zu M\u00fcnchen, mindestens 50 Mitarbeiter, vorhandene zweite F\u00fchrungsebene und deren Gestaltung sowie ein EBIT von mindestens 1,5 Mio Euro. Gib stichpunktartige Einsch\u00e4tzungen oder \"Faktor: Details\" zur\u00fcck.",
+    tools=search_tools,
+    model=MODEL_NAME,
+)
 report_agent     = Agent("ReportAgent",            instructions="Return ONLY valid minified JSON. Example: {\"summary\":\"text\",\"keywords\":[\"k\"],\"metrics\":{\"m\":1}}. No comments, no trailing commas, no explanations.", tools=[], model=MODEL_NAME)
 supervisor_agent = Agent(
     "SupervisorAgent",
@@ -269,6 +275,7 @@ AGENT_MAP = {
     "FinancialHealthAgent": financial_agent,
     "MarketOpportunityAgent": market_agent,
     "RiskAssessmentAgent": risk_agent,
+    "AlveusFitAgent": alveus_fit_agent,
 }
 
 # -----------------------------------------------------------------------------
@@ -318,7 +325,8 @@ async def evaluate(pdf: str, project: str) -> EvaluationResult:
         report_payload = (
             f"Financial:\n{results['FinancialHealthAgent']}\n\n"
             f"Market:\n{results['MarketOpportunityAgent']}\n\n"
-            f"Risk:\n{results['RiskAssessmentAgent']}"
+            f"Risk:\n{results['RiskAssessmentAgent']}\n\n"
+            f"AlveusFit:\n{results['AlveusFitAgent']}"
         )
         raw = Runner.run_sync(report_agent, report_payload).final_output.strip()
         print("RAW OUTPUT FROM REPORT AGENT:\n", raw)
