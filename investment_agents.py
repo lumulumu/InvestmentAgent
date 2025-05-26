@@ -253,13 +253,13 @@ shared_tools  = [parse_pdf]
 search_tools  = [parse_pdf, web_search]
 vector_tools  = [vector_memory_tool]
 
-financial_agent  = Agent("FinancialHealthAgent",  instructions="Extract key financial metrics.",              tools=shared_tools, model=MODEL_NAME)
-market_agent     = Agent("MarketOpportunityAgent", instructions="Analyse market size & competition.",          tools=search_tools, model=MODEL_NAME)
-risk_agent       = Agent("RiskAssessmentAgent",    instructions="Identify major financial & operational risks.", tools=search_tools, model=MODEL_NAME)
-report_agent     = Agent("ReportAgent",            instructions="Return ONLY valid minified JSON: {\"summary\":..., \"keywords\":[], \"metrics\":{}}. No comments, no trailing commas, no explanations.", tools=[], model=MODEL_NAME)
+financial_agent  = Agent("FinancialHealthAgent",  instructions="Extract key financial metrics. Return bullet points or \"metric: value\" pairs.",              tools=shared_tools, model=MODEL_NAME)
+market_agent     = Agent("MarketOpportunityAgent", instructions="Analyse market size and competition. Provide bullet points or \"factor: detail\" pairs summarising opportunity.",          tools=search_tools, model=MODEL_NAME)
+risk_agent       = Agent("RiskAssessmentAgent",    instructions="Identify major financial and operational risks. Return bullet points or \"risk: explanation\" pairs.", tools=search_tools, model=MODEL_NAME)
+report_agent     = Agent("ReportAgent",            instructions="Return ONLY valid minified JSON. Example: {\"summary\":\"text\",\"keywords\":[\"k\"],\"metrics\":{\"m\":1}}. No comments, no trailing commas, no explanations.", tools=[], model=MODEL_NAME)
 supervisor_agent = Agent(
     "SupervisorAgent",
-    instructions="Return YES/NO or RETRY <Agent>:<reason>.",
+    instructions="Return YES/NO or RETRY <Agent>:<reason>. Use the \"Past:\" section, sourced from vector_memory, to judge whether current results improve on previous ones.",
     tools=vector_tools,
     model=MODEL_NAME,
 )
