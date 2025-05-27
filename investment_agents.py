@@ -266,8 +266,8 @@ alveus_fit_agent = Agent(
 report_agent     = Agent(
     "ReportAgent",
     instructions=(
-        "Return a concise Markdown report containing sections 'Summary', 'Keywords',"
-        " 'Metrics', 'Decision' and 'Rationale'. Use bullet lists where appropriate."
+        "Return a concise Markdown report containing sections minimum the following sections but can be much longer: 'Executive Summary', "
+        " 'Metrics', 'Decision', 'Alveus Fit', 'Risk', 'Rationale', 'Long Report' . Use bullet lists where appropriate."
     ),
     tools=[],
     model=MODEL_NAME,
