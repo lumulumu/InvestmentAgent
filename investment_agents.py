@@ -7,7 +7,6 @@ from __future__ import annotations
 import os
 import sys
 import json
-from jinja2 import Environment, select_autoescape
 import re
 from typing import Any, Dict, List
 from dataclasses import dataclass
@@ -32,7 +31,7 @@ class EvaluationResult:
     metrics: Dict[str, Any]
     decision: str
     rationale: str
-    html: str
+    markdown: str
 
 # -----------------------------------------------------------------------------
 # Optional deps with explicit error messages
@@ -264,7 +263,15 @@ alveus_fit_agent = Agent(
     tools=search_tools,
     model=MODEL_NAME,
 )
-report_agent     = Agent("ReportAgent",            instructions="Return ONLY valid minified JSON. Example: {\"summary\":\"text\",\"keywords\":[\"k\"],\"metrics\":{\"m\":1}}. No comments, no trailing commas, no explanations.", tools=[], model=MODEL_NAME)
+report_agent     = Agent(
+    "ReportAgent",
+    instructions=(
+        "Return a concise Markdown report containing sections 'Summary', 'Keywords',"
+        " 'Metrics', 'Decision' and 'Rationale'. Use bullet lists where appropriate."
+    ),
+    tools=[],
+    model=MODEL_NAME,
+)
 supervisor_agent = Agent(
     "SupervisorAgent",
     instructions="Return YES/NO or RETRY <Agent>:<reason>. Use the \"Past:\" section, sourced from vector_memory, to judge whether current results improve on previous ones.",
@@ -281,32 +288,34 @@ AGENT_MAP = {
 }
 
 # -----------------------------------------------------------------------------
-# HTML report helper using Jinja2 template (autoescaped)
+# Markdown report helper
 # -----------------------------------------------------------------------------
 
-_env = Environment(autoescape=select_autoescape(["html"]))
-_HTML_TEMPLATE = _env.from_string(
-    """<!doctype html><html><head><meta charset='utf-8'></head><body>"
-    "<h1>{{ project }}</h1>"
-    "<h2>Summary</h2><p>{{ summary }}</p>"
-    "<h2>Keywords</h2><ul>{% for k in keywords %}<li>{{ k }}</li>{% endfor %}</ul>"
-    "<h2>Metrics</h2><table>{% for k, v in metrics.items() %}<tr><td>{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}</table>"
-    "<h2>Decision</h2><p>{{ decision }}</p>"
-    "<h2>Rationale</h2><p>{{ rationale }}</p>"
-    "</body></html>"""  # noqa: E501
-)
+def _write_markdown(path: str, content: str) -> None:
+    """Persist ``content`` to ``path`` as UTF-8."""
+    open(path, "w", encoding="utf-8").write(content)
 
-def _html(path: str, project: str, summary: str, keywords: list[str], metrics: dict[str, Any], decision: str, rationale: str):
-    """Write a small HTML report summarising the agent output."""
-    html_content = _HTML_TEMPLATE.render(
-        project=project,
-        summary=summary,
-        keywords=keywords,
-        metrics=metrics,
-        decision=decision,
-        rationale=rationale,
-    )
-    open(path, "w", encoding="utf-8").write(html_content)
+
+def _extract_md_section(md: str, heading: str) -> str:
+    """Return the text underneath ``# {heading}``."""
+    pattern = rf"# {re.escape(heading)}\n(.*?)(?:\n#|$)"
+    m = re.search(pattern, md, re.S)
+    return m.group(1).strip() if m else ""
+
+
+def _extract_md_list(md: str, heading: str) -> List[str]:
+    section = _extract_md_section(md, heading)
+    return [re.sub(r"^[-*]\s*", "", line).strip() for line in section.splitlines() if line.strip()]
+
+
+def _extract_md_kv(md: str, heading: str) -> Dict[str, Any]:
+    section = _extract_md_section(md, heading)
+    out: Dict[str, Any] = {}
+    for line in section.splitlines():
+        if ':' in line:
+            k, v = line.split(':', 1)
+            out[k.strip()] = v.strip()
+    return out
 
 # -----------------------------------------------------------------------------
 # Orchestrator
@@ -321,43 +330,38 @@ async def evaluate(pdf: str, project: str) -> EvaluationResult:
     raw_results = await asyncio.gather(*tasks.values())
     results = {k: r.final_output for k, r in zip(tasks.keys(), raw_results)}
 
-    while True:
-        # Supervisor may request a retry of one of the agents. Currently we only
-        # run a single pass, but the loop allows for future extensions.
-        report_payload = (
-            f"Financial:\n{results['FinancialHealthAgent']}\n\n"
-            f"Market:\n{results['MarketOpportunityAgent']}\n\n"
-            f"Risk:\n{results['RiskAssessmentAgent']}\n\n"
-            f"AlveusFit:\n{results['AlveusFitAgent']}"
-        )
-        raw = Runner.run_sync(report_agent, report_payload).final_output.strip()
-        print("RAW OUTPUT FROM REPORT AGENT:\n", raw)
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            m = re.search(r"\{.*\}", raw, re.S)
-            if not m:
-                raise ValueError("ReportAgent returned no JSON")
-            print("REGEX-MATCHED JSON:\n", m.group(0))
-            data = json.loads(m.group(0))
+    # Compile supervisor input from specialist results and past projects
+    sup_in = (
+        f"Financial:\n{results['FinancialHealthAgent']}\n\n"
+        f"Market:\n{results['MarketOpportunityAgent']}\n\n"
+        f"Risk:\n{results['RiskAssessmentAgent']}\n\n"
+        f"AlveusFit:\n{results['AlveusFitAgent']}\n\n"
+        f"Past:{vector_memory('query', summary=' '.join(results.values()))}"
+    )
+    sup_raw = Runner.run_sync(supervisor_agent, sup_in).final_output.strip()
 
-        summary, keywords, metrics = data["summary"], data["keywords"], data["metrics"]
-        sup_in = (
-            f"Summary:\n{summary}\n"
-            f"Keywords:{keywords}\n"
-            f"Metrics:{metrics}\n"
-            f"Past:{vector_memory('query', summary=str(summary))}"
-        )
-        sup_raw = Runner.run_sync(supervisor_agent, sup_in).final_output.strip()
+    decision, *rationale_parts = sup_raw.split("\n", 1)
+    rationale = rationale_parts[0] if rationale_parts else ""
 
-        decision, *rationale_parts = sup_raw.split("\n", 1)
-        rationale = rationale_parts[0] if rationale_parts else ""
-        break  # exit while
+    report_payload = (
+        f"Financial:\n{results['FinancialHealthAgent']}\n\n"
+        f"Market:\n{results['MarketOpportunityAgent']}\n\n"
+        f"Risk:\n{results['RiskAssessmentAgent']}\n\n"
+        f"AlveusFit:\n{results['AlveusFitAgent']}\n\n"
+        f"Decision:\n{decision}\n\n"
+        f"Rationale:\n{rationale}"
+    )
+    markdown = Runner.run_sync(report_agent, report_payload).final_output.strip()
+    print("RAW OUTPUT FROM REPORT AGENT:\n", markdown)
+
+    summary = _extract_md_section(markdown, "Summary")
+    keywords = _extract_md_list(markdown, "Keywords")
+    metrics = _extract_md_kv(markdown, "Metrics")
 
     # Persist the interaction history and write the HTML report
     vector_memory("add", project=project, summary=summary, keywords=keywords, rationale=rationale)
-    html_path = os.path.join(REPORT_DIR, f"{project}.html")
-    _html(html_path, project, summary, keywords, metrics, decision, rationale)
+    md_path = os.path.join(REPORT_DIR, f"{project}.md")
+    _write_markdown(md_path, markdown)
 
     return EvaluationResult(
         summary=summary,
@@ -365,7 +369,7 @@ async def evaluate(pdf: str, project: str) -> EvaluationResult:
         metrics=metrics,
         decision=decision,
         rationale=rationale,
-        html=html_path,
+        markdown=md_path,
     )
 
 # -----------------------------------------------------------------------------
@@ -378,7 +382,7 @@ if __name__ == "__main__":
 
     async def main():
         output = await evaluate(sys.argv[1], sys.argv[2])
-        print("Report saved to", output.html)
+        print("Report saved to", output.markdown)
 
     try:
         asyncio.run(main())

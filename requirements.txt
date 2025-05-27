@@ -16,9 +16,7 @@ urllib3                # für Retry-Adapter (requests bringt es intern mit, aber
 numpy
 
 # Templating
-Jinja2
-
-PyPDF2
+# (nicht mehr benötigt)
 
 asyncio
 nest_asyncio

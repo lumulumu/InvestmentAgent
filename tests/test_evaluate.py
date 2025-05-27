@@ -29,7 +29,7 @@ def fake_run_sync(agent, text):
         def __init__(self, out):
             self.final_output = out
     if agent.name == 'ReportAgent':
-        return Res('{"summary":"s","keywords":["k"],"metrics":{"m":1}}')
+        return Res('# Summary\ns\n\n# Keywords\n- k\n\n# Metrics\n- m: 1\n\n# Decision\nYES\n\n# Rationale\nall good')
     if agent.name == 'SupervisorAgent':
         return Res('YES\nall good')
     return Res(f'result from {agent.name}')
@@ -40,7 +40,7 @@ async def fake_run_async(agent, text):
     return fake_run_sync(agent, text)
 
 
-def test_evaluate_creates_html(tmp_path, monkeypatch):
+def test_evaluate_creates_markdown(tmp_path, monkeypatch):
     setup_simple_env(tmp_path, monkeypatch)
     monkeypatch.setattr(ia, '_extract_pdf', lambda pdf: 'text')
     monkeypatch.setattr(ia.Runner, 'run_sync', staticmethod(fake_run_sync))
@@ -48,9 +48,9 @@ def test_evaluate_creates_html(tmp_path, monkeypatch):
     result = asyncio.run(ia.evaluate('dummy.pdf', 'proj1'))
     assert result.summary == 's'
     assert result.decision == 'YES'
-    assert os.path.exists(result.html)
-    with open(result.html, 'r', encoding='utf-8') as fh:
-        assert '<html>' in fh.read()
+    assert os.path.exists(result.markdown)
+    with open(result.markdown, 'r', encoding='utf-8') as fh:
+        assert '# Summary' in fh.read()
 
 
 def test_vector_memory_add_query_list(tmp_path, monkeypatch):
