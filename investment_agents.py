@@ -20,6 +20,8 @@ import openai
 import logging
 import time
 from PyPDF2 import PdfReader, PdfWriter
+import markdown2
+from weasyprint import HTML
 
 
 @dataclass
@@ -363,6 +365,10 @@ async def evaluate(pdf: str, project: str) -> EvaluationResult:
     md_path = os.path.join(REPORT_DIR, f"{project}.md")
     _write_markdown(md_path, markdown)
 
+    # PDF-Export
+    pdf_path = os.path.join(REPORT_DIR, f"{project}.pdf")
+    _write_pdf(md_path, pdf_path)
+
     return EvaluationResult(
         summary=summary,
         keywords=keywords,
@@ -370,7 +376,15 @@ async def evaluate(pdf: str, project: str) -> EvaluationResult:
         decision=decision,
         rationale=rationale,
         markdown=md_path,
+        # pdf=pdf_path,  # falls du das Feld ergänzen willst
     )
+
+def _write_pdf(md_path: str, pdf_path: str) -> None:
+    """Konvertiert eine Markdown-Datei in ein PDF und speichert es."""
+    with open(md_path, "r", encoding="utf-8") as f:
+        md_content = f.read()
+    html_content = markdown2.markdown(md_content)
+    HTML(string=html_content).write_pdf(pdf_path)
 
 # -----------------------------------------------------------------------------
 # CLI entry

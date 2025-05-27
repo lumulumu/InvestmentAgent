@@ -17,10 +17,14 @@ from functools import lru_cache
 import numpy as np
 import openai
 from PyPDF2 import PdfReader, PdfWriter
+import markdown2
+import pdfkit
 
 # AutoGen imports -- only loaded when the module is used
 try:
-    import autogen
+    from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
+    from autogen_core.memory import ListMemory
+    from autogen_ext.models.openai import OpenAIChatCompletionClient
 except ModuleNotFoundError as exc:  # pragma: no cover
     raise SystemExit(
         "Microsoft AutoGen is required. Install with `pip install pyautogen`."
@@ -89,7 +93,6 @@ def _extract_pdf(file_path: str, chunk_pages: int = 20) -> str:
     return "\n".join(text_parts)
 
 
-@autogen.tool
 def web_search(query: str) -> str:
     """Lightweight web search via SerpAPI."""
     import requests
@@ -112,7 +115,6 @@ def web_search(query: str) -> str:
 
 
 # Vector memory tool
-@autogen.tool
 def vector_memory(action: str, *, project: str = "", summary: str = "", keywords: List[str] | None = None, rationale: str = "") -> Any:
     if action == "add":
         blob = " ".join([project, summary, " ".join(keywords or []), rationale])
@@ -130,13 +132,14 @@ def vector_memory(action: str, *, project: str = "", summary: str = "", keywords
 # Agent factory
 # ---------------------------------------------------------------------------
 
-def make_agent(name: str, instructions: str, tools: List[Any] | None = None) -> autogen.AssistantAgent:
-    memory = autogen.memory.SummaryBufferMemory(token_limit=2000)
-    agent = autogen.AssistantAgent(
+def make_agent(name: str, instructions: str, tools: List[Any] | None = None) -> AssistantAgent:
+    memory = ListMemory(name=f"{name}_mem")
+    model_client = OpenAIChatCompletionClient(model=MODEL_NAME, api_key=OPENAI_API_KEY)
+    agent = AssistantAgent(
         name=name,
         system_message=instructions,
-        llm_config={"model": MODEL_NAME, "api_key": OPENAI_API_KEY},
-        memory=memory,
+        model_client=model_client,
+        memory=[memory],
     )
     for tool in tools or []:
         agent.register_tool(tool)
@@ -226,12 +229,20 @@ def _extract_md_kv(md: str, heading: str) -> Dict[str, Any]:
     return out
 
 
+def _write_pdf(md_path: str, pdf_path: str) -> None:
+    """Konvertiert eine Markdown-Datei in ein PDF und speichert es."""
+    with open(md_path, "r", encoding="utf-8") as f:
+        md_content = f.read()
+    html_content = markdown2.markdown(md_content)
+    pdfkit.from_string(html_content, pdf_path)
+
+
 # ---------------------------------------------------------------------------
 # Agent invocation helpers
 # ---------------------------------------------------------------------------
 
-async def _run_agent(agent: autogen.AssistantAgent, text: str) -> str:
-    user = autogen.UserProxyAgent("orchestrator", human_input_mode="NEVER")
+async def _run_agent(agent: AssistantAgent, text: str) -> str:
+    user = UserProxyAgent("orchestrator", human_input_mode="NEVER")
     await user.initiate_chat(agent, message=text)
     return user.last_message(agent).content
 
@@ -274,6 +285,10 @@ async def evaluate(pdf: str, project: str) -> EvaluationResult:
     vector_memory("add", project=project, summary=summary, keywords=keywords, rationale=rationale)
     md_path = os.path.join(REPORT_DIR, f"{project}.md")
     _write_markdown(md_path, markdown)
+
+    # PDF-Export
+    pdf_path = os.path.join(REPORT_DIR, f"{project}.pdf")
+    _write_pdf(md_path, pdf_path)
 
     return EvaluationResult(
         summary=summary,

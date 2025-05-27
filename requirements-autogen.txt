@@ -17,3 +17,10 @@ numpy
 
 # Async tools
 asyncio
+
+markdown2
+weasyprint
+
+
+autogen-agentchat
+autogen-ext[openai]
