@@ -45,3 +45,10 @@ python autogen_agents.py <PDF-path> <project>
 
 See `AUTOGEN_GUIDE.md` for details and memory optimisation notes.
 
+## Performance
+
+`investment_agents.py` now attempts a quick text extraction using `PyPDF2`.
+If the PDF already contains selectable text, no Vision API calls are issued,
+which drastically speeds up the pipeline. Only image‑based pages are sent to
+GPT‑Vision as a fallback.
+

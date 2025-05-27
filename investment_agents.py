@@ -155,13 +155,21 @@ def _embed(text: str) -> np.ndarray:
     vec = np.asarray(vec, dtype="float32")
     return vec / np.linalg.norm(vec)
 
-
+@lru_cache(maxsize=8)
 def _extract_pdf(file_path: str, chunk_pages: int = 20) -> str:
-    """Upload ``file_path`` in page chunks and let GPT‑Vision return the text."""
+    """Return all text in ``file_path``. Uses local extraction when possible and
+    falls back to GPT-Vision for image-only pages."""
 
     reader = PdfReader(open(file_path, "rb"))
-    text_parts: List[str] = []
 
+    # First attempt a quick local extraction. This avoids network calls for
+    # regular text-based PDFs and therefore speeds up development runs
+    simple_text = "\n".join(filter(None, (p.extract_text() for p in reader.pages)))
+    if simple_text.strip():
+        return simple_text
+
+    # Fallback: chunk the PDF and let GPT-Vision read it
+    text_parts: List[str] = []
     for start in range(0, len(reader.pages), chunk_pages):
         writer = PdfWriter()
         for p in range(start, min(start + chunk_pages, len(reader.pages))):
@@ -169,12 +177,11 @@ def _extract_pdf(file_path: str, chunk_pages: int = 20) -> str:
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             writer.write(tmp)
             tmp.flush()
-            tmp_path = tmp.name  # Merke den Pfad
+            tmp_path = tmp.name
 
         with open(tmp_path, "rb") as f:
             up_file = _openai_call(client.files.create, file=f, purpose="user_data")
 
-        # Optional: temporäre Datei löschen
         os.remove(tmp_path)
 
         comp = _openai_call(
