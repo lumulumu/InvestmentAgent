@@ -133,6 +133,8 @@ def vector_memory(action: str, *, project: str = "", summary: str = "", keywords
 # ---------------------------------------------------------------------------
 
 def make_agent(name: str, instructions: str, tools: List[Any] | None = None) -> AssistantAgent:
+    """Create an AutoGen assistant with optional tools."""
+
     memory = ListMemory(name=f"{name}_mem")
     model_client = OpenAIChatCompletionClient(model=MODEL_NAME, api_key=OPENAI_API_KEY)
     agent = AssistantAgent(
@@ -140,9 +142,8 @@ def make_agent(name: str, instructions: str, tools: List[Any] | None = None) -> 
         system_message=instructions,
         model_client=model_client,
         memory=[memory],
+        tools=tools or [],
     )
-    for tool in tools or []:
-        agent.register_tool(tool)
     return agent
 
 
