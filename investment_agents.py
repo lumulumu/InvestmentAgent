@@ -73,7 +73,7 @@ RETRY_POLICY = Retry(total=3, backoff_factor=.5, status_forcelist=[429, 500, 502
 # -----------------------------------------------------------------------------
 # OpenAI & HTTP clients
 # -----------------------------------------------------------------------------
-client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=30, max_retries=2)
+client = openai.OpenAI(api_key=OPENAI_API_KEY, timeout=120, max_retries=2)
 
 _session = requests.Session()
 _session.mount(
