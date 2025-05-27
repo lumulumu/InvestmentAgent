@@ -274,7 +274,7 @@ report_agent     = Agent(
 )
 supervisor_agent = Agent(
     "SupervisorAgent",
-    instructions="Return YES/NO or RETRY <Agent>:<reason>. Use the \"Past:\" section, sourced from vector_memory, to judge whether current results improve on previous ones.",
+    instructions="Return YES/NO or RETRY <Agent>:<reason>. Use the \"Past:\" section, sourced from vector_memory, to judge whether current results improve on previous ones. You are the investment manager and responsible to create an actionable report for the investment committee. If you decide to retry an agent, provide a reason why the previous result was not sufficient.",
     tools=vector_tools,
     model=MODEL_NAME,
 )
