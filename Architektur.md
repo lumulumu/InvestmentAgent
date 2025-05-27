@@ -11,7 +11,7 @@ Die Datei `requirements.txt` listet alle benutzten Pakete. Wichtig sind insbeson
 - `PyPDF2` – Einlesen und Aufteilen von PDF‑Dokumenten.
 - `requests` und `urllib3` – HTTP‑Requests inkl. Retry‑Policy für SerpAPI.
 - `numpy` – Verarbeitung numerischer Daten und Embeddings.
-- `Jinja2` – Rendering des finalen HTML‑Berichts.
+- Markdown wird direkt geschrieben, es wird kein Templating benötigt.
 - `nest_asyncio` – Ermöglicht verschachtelte Event‑Loops (z.B. in Jupyter).
 
 ## 2. Konfiguration und Initialisierung
@@ -42,7 +42,7 @@ Es existieren mehrere spezialisierte Agenten, definiert über das Agents SDK:
 - `MarketOpportunityAgent` – analysiert Markt und Wettbewerb.
 - `RiskAssessmentAgent` – identifiziert finanzielle und operative Risiken.
 - `AlveusFitAgent` – prüft projektspezifische Kriterien.
-- `ReportAgent` – fasst die Resultate in einem schlanken JSON zusammen.
+ - `ReportAgent` – erzeugt einen Markdown‑Bericht aus allen Ergebnissen.
 - `SupervisorAgent` – bewertet die Ergebnisse und entscheidet YES/NO bzw. fordert einen RETRY an.
 
 Jeder Agent erhält eine Instruktion und je nach Bedarf Zugriff auf bestimmte Tools (PDF‑Parser, Websuche, Vektorspeicher). Die Definitionen sind in den Zeilen 252‑271 zu finden.【F:investment_agents.py†L252-L271】
@@ -51,9 +51,9 @@ Jeder Agent erhält eine Instruktion und je nach Bedarf Zugriff auf bestimmte To
 Die zentrale Funktion `evaluate(pdf, project)` steuert den Ablauf:
 1. Das PDF wird mit `_extract_pdf` in reinen Text umgewandelt.
 2. Alle Spezialagenten werden parallel über `Runner.run` auf diesen Text angewendet.【F:investment_agents.py†L317-L320】
-3. Anschließend wird das zusammengesetzte Ergebnis vom `ReportAgent` in ein JSON‑Objekt verwandelt. Falls das JSON nicht direkt geparst werden kann, wird per Regex nachgeholfen.【F:investment_agents.py†L325-L340】
-4. Der `SupervisorAgent` erhält die aktuelle Zusammenfassung sowie vergangene Ergebnisse aus dem Vektorspeicher, um eine Entscheidung zu treffen (YES/NO) und ggf. eine Begründung auszugeben.【F:investment_agents.py†L342-L349】
-5. Das Resultat wird im FAISS‑Vektorstore gespeichert und ein HTML‑Bericht über Jinja2 erzeugt. Der Pfad zum Bericht wird im Rückgabewert festgehalten.【F:investment_agents.py†L357-L368】
+3. Die Ergebnisse werden dem `SupervisorAgent` vorgelegt, der eine Entscheidung trifft (YES/NO) und eine Begründung liefert.【F:investment_agents.py†L331-L343】
+4. Anschließend erstellt der `ReportAgent` daraus einen Markdown‑Bericht.【F:investment_agents.py†L345-L349】
+5. Das Resultat wird im FAISS‑Vektorstore gespeichert und der Markdown‑Bericht abgelegt. Der Pfad zum Bericht wird im Rückgabewert festgehalten.【F:investment_agents.py†L350-L361】
 
 Diese Funktion dient ebenfalls als CLI‑Entry‑Point und kann direkt mit `python investment_agents.py <pdf> <projektname>` aufgerufen werden. Ein Fallback sorgt dafür, dass auch in Umgebungen mit bereits laufendem Event‑Loop (z.B. Jupyter) ausgeführt werden kann.【F:investment_agents.py†L372-L389】
 

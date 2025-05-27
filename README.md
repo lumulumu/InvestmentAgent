@@ -28,8 +28,8 @@ python investment_agents.py ./KPIs.pdf test
 ```
 
 The PDF path is the first argument and `test` is the project name used to store
-the results. Generated HTML reports are written to `data/reports/<project>.html`.
+the results. Generated Markdown reports are written to `data/reports/<project>.md`.
 
-HTML output is rendered via a small Jinja2 template to ensure proper escaping and maintainability.
+The final report is created directly in Markdown without any HTML templating.
 
 The embedding memory is handled through `vector_store.VectorStore`, which currently wraps a FAISS index. This abstraction allows alternative backends to be plugged in easily.
