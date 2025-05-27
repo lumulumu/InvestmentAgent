@@ -1,72 +1,82 @@
-# Architekturübersicht des InvestmentAgent-Projekts
+# Detaillierte Architektur des InvestmentAgent-Projekts
 
-Diese Anleitung beschreibt den Aufbau des Skripts `investment_agents.py` und erläutert die Abläufe, so dass ein ähnliches Konzept mit einem anderen Multi‑Agent‑Framework (z.B. Microsoft AutoGen) umgesetzt werden kann.
+Diese Anleitung fasst den gesamten Aufbau des Skripts `investment_agents.py` zusammen. Sie soll es einem anderen Bot ermöglichen, das Konzept mit einem beliebigen Multi-Agent-Framework (z.B. Microsoft AutoGen) nachzubauen. Die aktuelle Umsetzung verwendet das OpenAI Agents SDK, lässt sich aber leicht übertragen.
 
-## 1. Abhängigkeiten
-Die Datei `requirements.txt` listet alle benutzten Pakete. Wichtig sind insbesondere:
+## 1. Verwendete Pakete
 
-- `openai` – Zugriff auf das OpenAI API.
-- `openai-agents` – Agents SDK zur Definition und Ausführung der Agenten.
-- `faiss-cpu` – Vektorspeicher zur Ablage von Embeddings.
-- `PyPDF2` – Einlesen und Aufteilen von PDF‑Dokumenten und zum Erzeugen eines einfachen PDF‑Reports.
-- `requests` und `urllib3` – HTTP‑Requests inkl. Retry‑Policy für SerpAPI.
-- `numpy` – Verarbeitung numerischer Daten und Embeddings.
-- Markdown wird direkt geschrieben, es wird kein Templating benötigt.
-- `nest_asyncio` – Ermöglicht verschachtelte Event‑Loops (z.B. in Jupyter).
+
+Die Datei `requirements.txt` enthält alle Abhängigkeiten. Wichtig sind insbesondere:
+
+- **openai** – Zugriff auf das OpenAI API.
+- **openai-agents** – Agents SDK zur Definition der Agenten.
+- **faiss-cpu** – Vektorspeicher für Embeddings.
+- **PyPDF2** – Aufteilen und Lesen von PDF-Dateien.
+- **requests** und **urllib3** – HTTP-Anfragen mit Retry-Logik für SerpAPI.
+- **numpy** – Berechnung und Speicherung der Embedding-Vektoren.
+- **nest_asyncio** – optional, um verschachtelte Event-Loops zu erlauben.
+
+Die Liste findet sich in `requirements.txt`【F:requirements.txt†L1-L20】.
 
 ## 2. Konfiguration und Initialisierung
-Umgebungvariablen definieren API‑Keys und optionale Einstellungen. Aus dem `README.md`:
-```
-OPENAI_API_KEY – OpenAI API key
-SERPAPI_API_KEY – SerpAPI key used for Google search
-AGENT_MODEL – optional model name, defaults to gpt-4o
-AGENT_DATA_DIR – optional directory for persistent data (defaults to ./data)
-```
-Der Code liest diese Variablen in `investment_agents.py` ein und setzt eine `Retry`‑Konfiguration für HTTP‑Aufrufe【F:investment_agents.py†L57-L82】.
-Es wird ein OpenAI‑Client erstellt und eine `requests`‑Session mit Retry‑Adapter konfiguriert.【F:investment_agents.py†L76-L81】.
 
-Lokale Daten (Reports, FAISS‑Index und Metadaten) werden im Verzeichnis `AGENT_DATA_DIR` abgelegt. Existiert dort bereits ein Index, wird er geladen, andernfalls neu erstellt.【F:investment_agents.py†L129-L140】.
+`investment_agents.py` liest mehrere Umgebungsvariablen ein und richtet eine globale Retry-Policy ein. Die wichtigsten Variablen sind `OPENAI_API_KEY`, `SERPAPI_API_KEY`, ein optionales `AGENT_MODEL` und `AGENT_DATA_DIR` für persistente Daten. Die Initialisierung erfolgt in den Zeilen 57–71 und richtet sowohl den OpenAI-Client als auch eine Requests-Session mit Retry-Adapter ein【F:investment_agents.py†L57-L82】.
 
-## 3. Hilfsfunktionen
-- `_embed(text)` erzeugt ein normalisiertes Embedding via OpenAI und nutzt LRU‑Caching, um wiederholte Anfragen zu vermeiden.【F:investment_agents.py†L149-L158】
-- `_extract_pdf(path)` lädt ein PDF seitenweise hoch, ruft GPT‑Vision zur Textextraktion auf und fügt die Ergebnisse zusammen.【F:investment_agents.py†L161-L202】
-- `web_search(query)` führt eine Google‑Suche über SerpAPI durch und gibt die Top‑Ergebnisse zurück.【F:investment_agents.py†L208-L217】
-- `vector_memory_impl(...)` stellt einen persistenten Vektor‑Speicher bereit: Embeddings können hinzugefügt, abgefragt oder gelistet werden.【F:investment_agents.py†L220-L244】
+Anschließend werden die Pfade zum Datenverzeichnis, dem FAISS-Index und den Metadaten gesetzt. Der Vektorspeicher wird über `VectorStore` geladen bzw. neu erstellt【F:investment_agents.py†L126-L139】【F:vector_store.py†L9-L26】.
 
-Diese Funktionen werden mithilfe von `function_tool` als Tools für die Agenten registriert (z.B. `parse_pdf`, `web_search`, `vector_memory_tool`).
+## 3. Hilfsfunktionen und Tools
 
-## 4. Agenten
-Es existieren mehrere spezialisierte Agenten, definiert über das Agents SDK:
+Mehrere Hilfsfunktionen dienen später als Tools für die Agenten:
 
-- `FinancialHealthAgent` – extrahiert Finanzkennzahlen.
-- `MarketOpportunityAgent` – analysiert Markt und Wettbewerb.
-- `RiskAssessmentAgent` – identifiziert finanzielle und operative Risiken.
-- `AlveusFitAgent` – prüft projektspezifische Kriterien.
- - `ReportAgent` – erzeugt einen Markdown‑Bericht aus allen Ergebnissen.
-- `SupervisorAgent` – bewertet die Ergebnisse und entscheidet YES/NO bzw. fordert einen RETRY an.
+1. **_embed(text)** erzeugt ein normiertes Embedding mit OpenAI und ist mit LRU-Cache versehen【F:investment_agents.py†L145-L154】.
+2. **_extract_pdf(path)** schneidet das PDF in Seitenblöcke, lädt diese hoch und lässt GPT-Vision den Text extrahieren【F:investment_agents.py†L157-L198】.
+3. **web_search(query)** ruft die SerpAPI mit einer Retry-Logik auf und sammelt die ersten Treffer【F:investment_agents.py†L204-L213】.
+4. **vector_memory_impl(...)** verwaltet die Einträge im FAISS-Index und kann Daten hinzufügen, abfragen oder auflisten【F:investment_agents.py†L216-L244】.
 
-Jeder Agent erhält eine Instruktion und je nach Bedarf Zugriff auf bestimmte Tools (PDF‑Parser, Websuche, Vektorspeicher). Die Definitionen sind in den Zeilen 252‑271 zu finden.【F:investment_agents.py†L252-L271】
+Diese Funktionen werden als Tools (über `function_tool`) registriert und stehen den Agenten je nach Rolle zur Verfügung.
 
-## 5. Orchestrierung
-Die zentrale Funktion `evaluate(pdf, project)` steuert den Ablauf:
-1. Das PDF wird mit `_extract_pdf` in reinen Text umgewandelt.
-2. Alle Spezialagenten werden parallel über `Runner.run` auf diesen Text angewendet.【F:investment_agents.py†L363-L366】
-3. Die Ergebnisse werden dem `SupervisorAgent` vorgelegt, der eine Entscheidung trifft (YES/NO) und eine Begründung liefert.【F:investment_agents.py†L368-L379】
-4. Anschließend erstellt der `ReportAgent` daraus einen Markdown‑Bericht.【F:investment_agents.py†L381-L388】
-5. Das Resultat wird im FAISS‑Vektorstore gespeichert. Der Bericht wird als Markdown und zusätzlich als PDF abgelegt; beide Pfade sind Teil des Rückgabewerts.【F:investment_agents.py†L396-L415】
+## 4. Agentendefinitionen
 
-Diese Funktion dient ebenfalls als CLI‑Entry‑Point und kann direkt mit `python investment_agents.py <pdf> <projektname>` aufgerufen werden. Ein Fallback sorgt dafür, dass auch in Umgebungen mit bereits laufendem Event‑Loop (z.B. Jupyter) ausgeführt werden kann.【F:investment_agents.py†L420-L441】
+Das Skript definiert sechs spezialisierte Agenten. Jeder erhält eine feste Instruktion und Zugriff auf ausgewählte Tools:
 
-## 6. Tests
-Im Ordner `tests` befindet sich ein Pytest‑Skript, das Kernfunktionen prüft. Dort werden die Agentenaufrufe durch Dummy‑Funktionen ersetzt, um die Pipeline ohne API‑Zugriff zu testen. Zudem wird der Vektorspeicher getestet (Add, Query, List).【F:tests/test_evaluate.py†L16-L60】
+- **FinancialHealthAgent** – analysiert Finanzkennzahlen.
+- **MarketOpportunityAgent** – bewertet Markt und Wettbewerb.
+- **RiskAssessmentAgent** – identifiziert wesentliche Risiken.
+- **AlveusFitAgent** – prüft projektspezifische Kriterien des Investors.
+- **ReportAgent** – erzeugt einen Markdown-Bericht aus den Zwischenergebnissen.
+- **SupervisorAgent** – beurteilt die Gesamtergebnisse (YES/NO bzw. RETRY) und greift auf frühere Projekte im Vektorspeicher zu.
 
-## 7. Übertragbarkeit auf andere Frameworks
-Um das Konzept z.B. in Microsoft AutoGen nachzubilden, sollte man folgende Punkte berücksichtigen:
+Die Definitionen befinden sich in den Zeilen 253–280 des Skripts【F:investment_agents.py†L253-L280】.
 
-1. **Tools implementieren:** PDF‑Parsing, Websuche und Vektor‑Speicher müssen als aufrufbare Funktionen bereitstehen. AutoGen bietet ebenfalls die Möglichkeit, Tools oder Skills zu registrieren.
-2. **Agentenrollen definieren:** Jede Rolle (Finanzen, Markt, Risiko, Projekt‑Fit, Report, Supervisor) erhält eine präzise Instruktion und ggf. Zugriff auf einzelne Tools. Die Parallelisierung der Agenten lässt sich in AutoGen mit asynchronen Calls oder Multi‑Agent‑Sessions realisieren.
-3. **Speicherung und Gedächtnis:** Der FAISS‑basierte Speicher dient dazu, frühere Projekte als Kontext zu verwenden. Im anderen Framework müsste ein vergleichbarer Vektorstore eingebunden werden.
-4. **Ablauf:** Zuerst Text extrahieren, anschließend Spezialagenten parallel ausführen, Resultat aggregieren, von einer übergeordneten Instanz bewerten lassen und schließlich Bericht erzeugen und Daten persistieren.
-5. **Fehlerbehandlung & Retries:** Sowohl OpenAI‑ als auch SerpAPI‑Aufrufe sind mit Retry‑Logik versehen. Ein alternatives Framework sollte ähnliche Mechanismen besitzen.
+## 5. Ablauf der Funktion `evaluate`
 
-Mit dieser Übersicht lässt sich die Struktur des InvestmentAgent-Projekts in ein beliebiges Multi‑Agent‑Framework übertragen.
+Die Orchestrierung geschieht in `evaluate(pdf, project)`:
+
+1. Das PDF wird per `_extract_pdf` in Text umgewandelt.
+2. Vier Spezialagenten (Financial, Market, Risk, AlveusFit) werden parallel auf diesen Text angesetzt【F:investment_agents.py†L324-L331】.
+3. Deren Ergebnisse und frühere Projektdaten bilden den Input für den Supervisor. Dieser entscheidet und liefert eine rationale Begründung【F:investment_agents.py†L333-L344】.
+4. Mit allen gesammelten Informationen erzeugt der ReportAgent den finalen Markdown-Bericht【F:investment_agents.py†L346-L355】.
+5. Anschließend werden Summary, Keywords und Metrics aus dem Markdown extrahiert und der FAISS-Store aktualisiert. Der Bericht wird im Ordner `data/reports` abgelegt【F:investment_agents.py†L357-L372】.
+
+`evaluate` gibt ein `EvaluationResult` zurück, das den Pfad zum gespeicherten Bericht enthält.
+
+## 6. Kommandozeilen-Aufruf
+
+Wird `investment_agents.py` direkt ausgeführt, erwartet es ein PDF und einen Projektnamen. Das Skript startet dann die asynchrone Pipeline. Falls bereits ein Event-Loop läuft (z.B. in Jupyter), wird `nest_asyncio` genutzt, um den bestehenden Loop zu verwenden【F:investment_agents.py†L375-L396】.
+
+## 7. Tests
+
+`tests/test_evaluate.py` simuliert die gesamte Pipeline ohne Netzwerkzugriff. Embeddings und Agentenaufrufe werden durch Dummy-Funktionen ersetzt, um die Speicherung und Verarbeitung zu testen. Ebenso wird der Vektorspeicher verifiziert (Hinzufügen, Abfragen, Auflisten)【F:tests/test_evaluate.py†L16-L60】.
+
+## 8. Übertragbarkeit auf andere Frameworks
+
+Um die gleiche Logik in einem anderen Framework wie Microsoft AutoGen zu implementieren, sollten folgende Konzepte berücksichtigt werden:
+
+1. **Tools implementieren:** PDF-Parsing, Websuche und Vektor-Gedächtnis müssen als aufrufbare Funktionen bereitstehen. In AutoGen können diese als "Skills" registriert werden.
+2. **Agentenrollen nachbilden:** Jede im Skript definierte Agentenrolle benötigt eine entsprechende Instruktion und Zugriff auf genau die Tools, die hier genutzt werden.
+3. **Parallele Ausführung:** Die Spezialagenten laufen zeitgleich. In AutoGen ließe sich dies durch parallele Aufrufe oder Multi-Agent-Sessions umsetzen.
+4. **Speicher für frühere Projekte:** Das Beispiel verwendet FAISS für Embeddings. In anderen Frameworks sollte ein kompatibler Vektorstore angebunden werden.
+5. **Supervisor-Logik:** Nach Auswertung der Spezialagenten wird eine zentrale Instanz benötigt, die entscheidet, ob das Ergebnis ausreichend ist oder erneut versucht werden soll. Diese Instanz sollte frühere Projekte in die Entscheidung einbeziehen.
+6. **Markdown-Bericht generieren:** Der finale Bericht wird direkt als Markdown erstellt. Ein anderes Framework kann dieses Format einfach übernehmen.
+
+Mit dieser Beschreibung lässt sich die Architektur des InvestmentAgent in einer beliebigen Multi-Agent-Umgebung reproduzieren.
+
