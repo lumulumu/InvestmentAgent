@@ -29,6 +29,7 @@ python investment_agents.py ./KPIs.pdf test
 
 The PDF path is the first argument and `test` is the project name used to store
 the results. Generated Markdown reports are written to `data/reports/<project>.md`.
+A simple PDF rendering of the Markdown is saved alongside as `data/reports/<project>.pdf`.
 
 The final report is created directly in Markdown without any HTML templating.
 

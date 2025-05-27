@@ -4,6 +4,7 @@ Diese Anleitung fasst den gesamten Aufbau des Skripts `investment_agents.py` zus
 
 ## 1. Verwendete Pakete
 
+
 Die Datei `requirements.txt` enthält alle Abhängigkeiten. Wichtig sind insbesondere:
 
 - **openai** – Zugriff auf das OpenAI API.
@@ -78,3 +79,4 @@ Um die gleiche Logik in einem anderen Framework wie Microsoft AutoGen zu impleme
 6. **Markdown-Bericht generieren:** Der finale Bericht wird direkt als Markdown erstellt. Ein anderes Framework kann dieses Format einfach übernehmen.
 
 Mit dieser Beschreibung lässt sich die Architektur des InvestmentAgent in einer beliebigen Multi-Agent-Umgebung reproduzieren.
+

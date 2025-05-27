@@ -49,6 +49,7 @@ def test_evaluate_creates_markdown(tmp_path, monkeypatch):
     assert result.summary == 's'
     assert result.decision == 'YES'
     assert os.path.exists(result.markdown)
+    assert os.path.exists(result.pdf)
     with open(result.markdown, 'r', encoding='utf-8') as fh:
         assert '# Summary' in fh.read()
 
