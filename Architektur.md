@@ -25,13 +25,13 @@ AGENT_DATA_DIR – optional directory for persistent data (defaults to ./data)
 Der Code liest diese Variablen in `investment_agents.py` ein und setzt eine `Retry`‑Konfiguration für HTTP‑Aufrufe【F:investment_agents.py†L57-L82】.
 Es wird ein OpenAI‑Client erstellt und eine `requests`‑Session mit Retry‑Adapter konfiguriert.【F:investment_agents.py†L76-L81】.
 
-Lokale Daten (Reports, FAISS‑Index und Metadaten) werden im Verzeichnis `AGENT_DATA_DIR` abgelegt. Existiert dort bereits ein Index, wird er geladen, andernfalls neu erstellt.【F:investment_agents.py†L128-L143】.
+Lokale Daten (Reports, FAISS‑Index und Metadaten) werden im Verzeichnis `AGENT_DATA_DIR` abgelegt. Existiert dort bereits ein Index, wird er geladen, andernfalls neu erstellt.【F:investment_agents.py†L129-L140】.
 
 ## 3. Hilfsfunktionen
 - `_embed(text)` erzeugt ein normalisiertes Embedding via OpenAI und nutzt LRU‑Caching, um wiederholte Anfragen zu vermeiden.【F:investment_agents.py†L149-L158】
 - `_extract_pdf(path)` lädt ein PDF seitenweise hoch, ruft GPT‑Vision zur Textextraktion auf und fügt die Ergebnisse zusammen.【F:investment_agents.py†L161-L202】
 - `web_search(query)` führt eine Google‑Suche über SerpAPI durch und gibt die Top‑Ergebnisse zurück.【F:investment_agents.py†L208-L217】
-- `vector_memory_impl(...)` stellt einen persistenten Vektor‑Speicher bereit: Embeddings können hinzugefügt, abgefragt oder gelistet werden.【F:investment_agents.py†L220-L243】
+- `vector_memory_impl(...)` stellt einen persistenten Vektor‑Speicher bereit: Embeddings können hinzugefügt, abgefragt oder gelistet werden.【F:investment_agents.py†L220-L244】
 
 Diese Funktionen werden mithilfe von `function_tool` als Tools für die Agenten registriert (z.B. `parse_pdf`, `web_search`, `vector_memory_tool`).
 
@@ -53,7 +53,7 @@ Die zentrale Funktion `evaluate(pdf, project)` steuert den Ablauf:
 2. Alle Spezialagenten werden parallel über `Runner.run` auf diesen Text angewendet.【F:investment_agents.py†L317-L320】
 3. Anschließend wird das zusammengesetzte Ergebnis vom `ReportAgent` in ein JSON‑Objekt verwandelt. Falls das JSON nicht direkt geparst werden kann, wird per Regex nachgeholfen.【F:investment_agents.py†L325-L340】
 4. Der `SupervisorAgent` erhält die aktuelle Zusammenfassung sowie vergangene Ergebnisse aus dem Vektorspeicher, um eine Entscheidung zu treffen (YES/NO) und ggf. eine Begründung auszugeben.【F:investment_agents.py†L342-L349】
-5. Das Resultat wird im FAISS‑Vektorstore gespeichert und ein HTML‑Bericht über Jinja2 erzeugt. Der Pfad zum Bericht wird im Rückgabewert festgehalten.【F:investment_agents.py†L355-L367】
+5. Das Resultat wird im FAISS‑Vektorstore gespeichert und ein HTML‑Bericht über Jinja2 erzeugt. Der Pfad zum Bericht wird im Rückgabewert festgehalten.【F:investment_agents.py†L357-L368】
 
 Diese Funktion dient ebenfalls als CLI‑Entry‑Point und kann direkt mit `python investment_agents.py <pdf> <projektname>` aufgerufen werden. Ein Fallback sorgt dafür, dass auch in Umgebungen mit bereits laufendem Event‑Loop (z.B. Jupyter) ausgeführt werden kann.【F:investment_agents.py†L372-L389】
 

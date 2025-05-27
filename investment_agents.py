@@ -49,6 +49,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover
 
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+from vector_store import VectorStore
 
 # -----------------------------------------------------------------------------
 # Configuration helpers
@@ -133,14 +134,10 @@ EMBED_DIM  = 1536  # ada‑002 dims
 os.makedirs(REPORT_DIR, exist_ok=True)
 
 # -----------------------------------------------------------------------------
-# FAISS index initialisation (cosine via normalised IP)
+# Vector store initialisation
 # -----------------------------------------------------------------------------
-if os.path.exists(INDEX_PATH) and os.path.exists(META_PATH):
-    index = faiss.read_index(INDEX_PATH)
-    metadata: List[Dict[str, Any]] = json.loads(open(META_PATH).read())
-else:
-    index = faiss.IndexIDMap(faiss.IndexFlatIP(EMBED_DIM))
-    metadata = []
+vstore = VectorStore(INDEX_PATH, META_PATH, EMBED_DIM)
+vstore.load()
 
 # -----------------------------------------------------------------------------
 # Embedding + PDF helper functions
@@ -217,27 +214,32 @@ def web_search(query: str) -> str:
     )
 
 
-def vector_memory_impl(action: str, *, project: str = "", summary: str = "",
-                      keywords: List[str] | None = None, rationale: str = "") -> Any:
-    """Add, query or list vectors in the persistent FAISS store."""
-    global index, metadata
+def vector_memory_impl(
+    action: str,
+    *,
+    project: str = "",
+    summary: str = "",
+    keywords: List[str] | None = None,
+    rationale: str = "",
+) -> Any:
+    """Add, query or list vectors in the persistent store."""
 
     if action == "add":
         blob = " ".join([project, summary, " ".join(keywords or []), rationale])
-        vec_id = len(metadata)
-        index.add_with_ids(np.expand_dims(_embed(blob), 0), np.array([vec_id]))
-        metadata.append({"project": project, "summary": summary, "keywords": keywords or [], "rationale": rationale})
-        faiss.write_index(index, INDEX_PATH)
-        open(META_PATH, "w").write(json.dumps(metadata, indent=2))
+        vstore.add(_embed(blob), {
+            "project": project,
+            "summary": summary,
+            "keywords": keywords or [],
+            "rationale": rationale,
+        })
         return "stored"
 
     if action == "query":
         vec = _embed(summary)
-        D, I = index.search(np.expand_dims(vec, 0), 3)
-        return [metadata[i] for i in I[0] if i != -1]
+        return vstore.query(vec)
 
     if action == "list":
-        return metadata
+        return vstore.list()
 
     raise ValueError("vector_memory action must be add|query|list")
 
