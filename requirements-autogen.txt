@@ -1,0 +1,19 @@
+# Core libraries
+openai>=1.0.0          # OpenAI-Python v1 API
+pyautogen              # Microsoft AutoGen framework
+
+# Vector store
+faiss-cpu              # or faiss-gpu if CUDA is available
+
+# PDF handling
+PyPDF2
+
+# Web & HTTP
+requests
+urllib3                # explicit version avoids surprises
+
+# Data utils
+numpy
+
+# Async tools
+asyncio
