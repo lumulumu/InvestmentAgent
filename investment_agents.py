@@ -63,7 +63,7 @@ def _env(name: str) -> str:
 
 OPENAI_API_KEY   = _env("OPENAI_API_KEY")
 SERPAPI_API_KEY  = _env("SERPAPI_API_KEY")
-MODEL_NAME       = os.getenv("AGENT_MODEL", "gpt-4o")  # override if project has access
+MODEL_NAME       = os.getenv("AGENT_MODEL", "o4-mini")  # override if project has access
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -254,9 +254,9 @@ shared_tools  = [parse_pdf]
 search_tools  = [parse_pdf, web_search]
 vector_tools  = [vector_memory_tool]
 
-financial_agent  = Agent("FinancialHealthAgent",  instructions="Extract key financial metrics. Return bullet points or \"metric: value\" pairs.",              tools=shared_tools, model=MODEL_NAME)
-market_agent     = Agent("MarketOpportunityAgent", instructions="Analyse market size and competition. Provide bullet points or \"factor: detail\" pairs summarising opportunity.",          tools=search_tools, model=MODEL_NAME)
-risk_agent       = Agent("RiskAssessmentAgent",    instructions="Identify major financial and operational risks. Return bullet points or \"risk: explanation\" pairs.", tools=search_tools, model=MODEL_NAME)
+financial_agent  = Agent("FinancialHealthAgent",  instructions="Extract key financial metrics. Return bullet points or \"metric: value\" pairs. Give an detailed assessment like an M&A Specialist of the Companies Financial Situation. incl. the business model and a potential outlook into the next 5 years.",              tools=shared_tools, model=MODEL_NAME)
+market_agent     = Agent("MarketOpportunityAgent", instructions="Analyse market size and competition. Create an executive summary summarising the opportunity. List The 5 biggest competitors. Highligh key products.",          tools=search_tools, model=MODEL_NAME)
+risk_agent       = Agent("RiskAssessmentAgent",    instructions="Identify major financial and operational risks. What are the biggest risks of this investment opportunity considering the Market, Product and Macro Economic situation.", tools=search_tools, model=MODEL_NAME)
 alveus_fit_agent = Agent(
     "AlveusFitAgent",
     instructions="Bewerte den Alveus-Fit: Distanz des Targets zu M\u00fcnchen, mindestens 50 Mitarbeiter, vorhandene zweite F\u00fchrungsebene und deren Gestaltung sowie ein EBIT von mindestens 1,5 Mio Euro. Gib stichpunktartige Einsch\u00e4tzungen oder \"Faktor: Details\" zur\u00fcck.",
