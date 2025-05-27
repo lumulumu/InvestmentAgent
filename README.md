@@ -33,3 +33,15 @@ the results. Generated Markdown reports are written to `data/reports/<project>.m
 The final report is created directly in Markdown without any HTML templating.
 
 The embedding memory is handled through `vector_store.VectorStore`, which currently wraps a FAISS index. This abstraction allows alternative backends to be plugged in easily.
+
+## AutoGen Version
+
+An alternative implementation using Microsoft AutoGen is available in `autogen_agents.py`. Install the separate dependencies from `requirements-autogen.txt` and run:
+
+```bash
+pip install -r requirements-autogen.txt
+python autogen_agents.py <PDF-path> <project>
+```
+
+See `AUTOGEN_GUIDE.md` for details and memory optimisation notes.
+
