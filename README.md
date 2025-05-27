@@ -31,3 +31,5 @@ The PDF path is the first argument and `test` is the project name used to store
 the results. Generated HTML reports are written to `data/reports/<project>.html`.
 
 HTML output is rendered via a small Jinja2 template to ensure proper escaping and maintainability.
+
+The embedding memory is handled through `vector_store.VectorStore`, which currently wraps a FAISS index. This abstraction allows alternative backends to be plugged in easily.

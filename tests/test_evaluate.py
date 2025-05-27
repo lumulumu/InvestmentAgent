@@ -15,8 +15,10 @@ ia = importlib.reload(ia)
 
 def setup_simple_env(tmp_path, monkeypatch):
     monkeypatch.setattr(ia, '_embed', lambda text: np.ones(ia.EMBED_DIM, dtype='float32'))
-    monkeypatch.setattr(ia, 'index', faiss.IndexIDMap(faiss.IndexFlatIP(ia.EMBED_DIM)))
-    monkeypatch.setattr(ia, 'metadata', [])
+    from vector_store import VectorStore
+    store = VectorStore(str(tmp_path/'index.bin'), str(tmp_path/'meta.json'), ia.EMBED_DIM)
+    store.load()
+    monkeypatch.setattr(ia, 'vstore', store)
     monkeypatch.setattr(ia, 'INDEX_PATH', str(tmp_path/'index.bin'))
     monkeypatch.setattr(ia, 'META_PATH', str(tmp_path/'meta.json'))
     monkeypatch.setattr(ia, 'REPORT_DIR', str(tmp_path))
@@ -57,4 +59,4 @@ def test_vector_memory_add_query_list(tmp_path, monkeypatch):
     assert ia.vector_memory_impl('add', project='p', summary='sum', keywords=['kw'], rationale='rat') == 'stored'
     q = ia.vector_memory_impl('query', summary='sum')
     assert q and q[0]['summary'] == 'sum'
-    assert ia.vector_memory_impl('list') == ia.metadata
+    assert ia.vector_memory_impl('list') == ia.vstore.list()
