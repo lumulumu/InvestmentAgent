@@ -20,6 +20,7 @@ import openai
 import logging
 import time
 from PyPDF2 import PdfReader, PdfWriter
+from PyPDF2.generic import NameObject, DictionaryObject, StreamObject
 
 
 @dataclass
@@ -32,6 +33,7 @@ class EvaluationResult:
     decision: str
     rationale: str
     markdown: str
+    pdf: str
 
 # -----------------------------------------------------------------------------
 # Optional deps with explicit error messages
@@ -296,6 +298,39 @@ def _write_markdown(path: str, content: str) -> None:
     open(path, "w", encoding="utf-8").write(content)
 
 
+def _markdown_to_pdf(content: str, path: str) -> None:
+    """Render Markdown ``content`` to a very simple PDF file."""
+    writer = PdfWriter()
+    width, height = 595, 842  # A4 size in points
+    page = writer.add_blank_page(width=width, height=height)
+
+    # Basic Helvetica font resource
+    font_dict = {
+        NameObject("/F1"): DictionaryObject({
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        })
+    }
+    page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): DictionaryObject(font_dict)})
+
+    y = height - 40
+    lines = ["BT", "/F1 12 Tf"]
+    for line in content.splitlines():
+        line = line.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
+        lines.append(f"1 0 0 1 50 {int(y)} Tm ({line}) Tj")
+        y -= 14
+        if y < 40:
+            break  # single page only
+    lines.append("ET")
+
+    stream = StreamObject()
+    stream._data = "\n".join(lines).encode("latin-1")
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    with open(path, "wb") as fh:
+        writer.write(fh)
+
+
 def _extract_md_section(md: str, heading: str) -> str:
     """Return the text underneath ``# {heading}``."""
     pattern = rf"# {re.escape(heading)}\n(.*?)(?:\n#|$)"
@@ -362,6 +397,12 @@ async def evaluate(pdf: str, project: str) -> EvaluationResult:
     vector_memory("add", project=project, summary=summary, keywords=keywords, rationale=rationale)
     md_path = os.path.join(REPORT_DIR, f"{project}.md")
     _write_markdown(md_path, markdown)
+    pdf_path = os.path.join(REPORT_DIR, f"{project}.pdf")
+    try:
+        _markdown_to_pdf(markdown, pdf_path)
+    except Exception as exc:  # pragma: no cover - optional rendering errors
+        logger.error("Failed to render PDF: %s", exc)
+        pdf_path = ""
 
     return EvaluationResult(
         summary=summary,
@@ -370,6 +411,7 @@ async def evaluate(pdf: str, project: str) -> EvaluationResult:
         decision=decision,
         rationale=rationale,
         markdown=md_path,
+        pdf=pdf_path,
     )
 
 # -----------------------------------------------------------------------------
@@ -383,6 +425,8 @@ if __name__ == "__main__":
     async def main():
         output = await evaluate(sys.argv[1], sys.argv[2])
         print("Report saved to", output.markdown)
+        if output.pdf:
+            print("PDF version:", output.pdf)
 
     try:
         asyncio.run(main())

@@ -8,7 +8,7 @@ Die Datei `requirements.txt` listet alle benutzten Pakete. Wichtig sind insbeson
 - `openai` – Zugriff auf das OpenAI API.
 - `openai-agents` – Agents SDK zur Definition und Ausführung der Agenten.
 - `faiss-cpu` – Vektorspeicher zur Ablage von Embeddings.
-- `PyPDF2` – Einlesen und Aufteilen von PDF‑Dokumenten.
+- `PyPDF2` – Einlesen und Aufteilen von PDF‑Dokumenten und zum Erzeugen eines einfachen PDF‑Reports.
 - `requests` und `urllib3` – HTTP‑Requests inkl. Retry‑Policy für SerpAPI.
 - `numpy` – Verarbeitung numerischer Daten und Embeddings.
 - Markdown wird direkt geschrieben, es wird kein Templating benötigt.
@@ -50,12 +50,12 @@ Jeder Agent erhält eine Instruktion und je nach Bedarf Zugriff auf bestimmte To
 ## 5. Orchestrierung
 Die zentrale Funktion `evaluate(pdf, project)` steuert den Ablauf:
 1. Das PDF wird mit `_extract_pdf` in reinen Text umgewandelt.
-2. Alle Spezialagenten werden parallel über `Runner.run` auf diesen Text angewendet.【F:investment_agents.py†L317-L320】
-3. Die Ergebnisse werden dem `SupervisorAgent` vorgelegt, der eine Entscheidung trifft (YES/NO) und eine Begründung liefert.【F:investment_agents.py†L331-L343】
-4. Anschließend erstellt der `ReportAgent` daraus einen Markdown‑Bericht.【F:investment_agents.py†L345-L349】
-5. Das Resultat wird im FAISS‑Vektorstore gespeichert und der Markdown‑Bericht abgelegt. Der Pfad zum Bericht wird im Rückgabewert festgehalten.【F:investment_agents.py†L350-L361】
+2. Alle Spezialagenten werden parallel über `Runner.run` auf diesen Text angewendet.【F:investment_agents.py†L363-L366】
+3. Die Ergebnisse werden dem `SupervisorAgent` vorgelegt, der eine Entscheidung trifft (YES/NO) und eine Begründung liefert.【F:investment_agents.py†L368-L379】
+4. Anschließend erstellt der `ReportAgent` daraus einen Markdown‑Bericht.【F:investment_agents.py†L381-L388】
+5. Das Resultat wird im FAISS‑Vektorstore gespeichert. Der Bericht wird als Markdown und zusätzlich als PDF abgelegt; beide Pfade sind Teil des Rückgabewerts.【F:investment_agents.py†L396-L415】
 
-Diese Funktion dient ebenfalls als CLI‑Entry‑Point und kann direkt mit `python investment_agents.py <pdf> <projektname>` aufgerufen werden. Ein Fallback sorgt dafür, dass auch in Umgebungen mit bereits laufendem Event‑Loop (z.B. Jupyter) ausgeführt werden kann.【F:investment_agents.py†L372-L389】
+Diese Funktion dient ebenfalls als CLI‑Entry‑Point und kann direkt mit `python investment_agents.py <pdf> <projektname>` aufgerufen werden. Ein Fallback sorgt dafür, dass auch in Umgebungen mit bereits laufendem Event‑Loop (z.B. Jupyter) ausgeführt werden kann.【F:investment_agents.py†L420-L441】
 
 ## 6. Tests
 Im Ordner `tests` befindet sich ein Pytest‑Skript, das Kernfunktionen prüft. Dort werden die Agentenaufrufe durch Dummy‑Funktionen ersetzt, um die Pipeline ohne API‑Zugriff zu testen. Zudem wird der Vektorspeicher getestet (Add, Query, List).【F:tests/test_evaluate.py†L16-L60】
