@@ -22,7 +22,7 @@ import pdfkit
 
 # AutoGen imports -- only loaded when the module is used
 try:
-    from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
+    from autogen.agentchat import AssistantAgent, UserProxyAgent
     from autogen_core.memory import ListMemory
     from autogen_ext.models.openai import OpenAIChatCompletionClient
 except ModuleNotFoundError as exc:  # pragma: no cover
