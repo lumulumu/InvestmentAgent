@@ -21,7 +21,8 @@ import logging
 import time
 from PyPDF2 import PdfReader, PdfWriter
 import markdown2
-from weasyprint import HTML
+
+import pdfkit
 
 
 @dataclass
@@ -390,8 +391,25 @@ def _write_pdf(md_path: str, pdf_path: str) -> None:
     """Konvertiert eine Markdown-Datei in ein PDF und speichert es."""
     with open(md_path, "r", encoding="utf-8") as f:
         md_content = f.read()
-    html_content = markdown2.markdown(md_content)
-    HTML(string=html_content).write_pdf(pdf_path)
+    html_body = markdown2.markdown(md_content)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: 'DejaVu Sans', 'Arial Unicode MS', Arial, sans-serif; }}
+        </style>
+    </head>
+    <body>
+        {html_body}
+    </body>
+    </html>
+    """
+    options = {
+        'encoding': "UTF-8",
+    }
+    pdfkit.from_string(html_content, pdf_path, options=options)
 
 # -----------------------------------------------------------------------------
 # CLI entry
